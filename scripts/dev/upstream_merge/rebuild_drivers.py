@@ -58,6 +58,15 @@ def mount_kernel_source(config, run_cmd):
         f'ssh -o StrictHostKeyChecking=no {ssh_target} '
         f'"mount | grep /usr/src/linux && umount /usr/src/linux || true"'
     )
+    
+    print("[REBUILD] Initializing SSH trust (target → build)")
+
+    run_cmd(
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
+        f'"mkdir -p ~/.ssh && chmod 700 ~/.ssh && '
+        f'ssh -o StrictHostKeyChecking=no '
+        f'{host_user}@{host_ip} \'echo SSH_OK\' || true"'
+    )
 
     # SSHFS mount (FINAL FIX ✅)
     rc, out = run_cmd(
