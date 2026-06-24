@@ -44,21 +44,21 @@ def mount_kernel_source(config, run_cmd):
 
     print("[REBUILD][STEP 1] Mount kernel source via SSHFS")
 
-    run_cmd(f'ssh {ssh_target} "mkdir -p /usr/src/linux"')
+    run_cmd(f'ssh -o StrictHostKeyChecking=no {ssh_target} "mkdir -p /usr/src/linux"')
     run_cmd(
-        f'ssh {ssh_target}'
+        f'ssh -o StrictHostKeyChecking=no {ssh_target}'
         f'"mount | grep /usr/src/linux && umount /usr/src/linux || true"'
     )
 
     rc, out = run_cmd(
-        f'ssh {ssh_target} '
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
         f'"sshfs -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null '
         f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux"'
     )
     print(out)
 
     rc, out = run_cmd(
-        f'ssh {ssh_target} "test -f /usr/src/linux/Makefile && echo OK"'
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} "test -f /usr/src/linux/Makefile && echo OK"'
     )
     print(out)
 
