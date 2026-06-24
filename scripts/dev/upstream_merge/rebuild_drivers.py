@@ -44,21 +44,42 @@ def mount_kernel_source(config, run_cmd):
 
     print("[REBUILD][STEP 1] Mount kernel source via SSHFS")
 
-    run_cmd(f'ssh -o StrictHostKeyChecking=no {ssh_target} "mkdir -p /usr/src/linux"')
+    # DEBUG (important)
+    print(f"[DEBUG] kernel_src_dir = {kernel_src_dir}")
+
+    # Ensure target dir exists
     run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target}'
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
+        f'"mkdir -p /usr/src/linux"'
+    )
+
+    # Unmount if already mounted
+    run_cmd(
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
         f'"mount | grep /usr/src/linux && umount /usr/src/linux || true"'
     )
 
+    # SSHFS mount (FINAL FIX ✅)
     rc, out = run_cmd(
         f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"sshfs -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null '
-        f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux"'
+        f'"sshfs -o StrictHostKeyChecking=no '
+        f'-o UserKnownHostsFile=/dev/null '
+        f'-o reconnect '
+        f'{host_user}@{host_ip}:{kernel_src_dir} '
+        f'/usr/src/linux"'
     )
     print(out)
 
+    # Verify mount contents (IMPORTANT ✅)
     rc, out = run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} "test -f /usr/src/linux/Makefile && echo OK"'
+        f'ssh {ssh_target} "ls -l /usr/src/linux | head"'
+    )
+    print(out)
+
+    # Check Makefile exists
+    rc, out = run_cmd(
+        f'ssh {ssh_target} '
+        f'"test -f /usr/src/linux/Makefile && echo OK"'
     )
     print(out)
 
@@ -68,7 +89,6 @@ def mount_kernel_source(config, run_cmd):
 
     print("[REBUILD][OK] Kernel source mounted via SSHFS")
     return 0
-
 
 def fix_symlinks(config, run_cmd):
     ssh_target = config.ssh_target

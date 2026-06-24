@@ -1,3 +1,5 @@
 build
 !build/conf/bblayers.conf
 downloads
+nilrt-kernel-build/
+temp/
