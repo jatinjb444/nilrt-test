@@ -2,6 +2,7 @@
 Rebuild NI out-of-tree drivers using DKMS.
 This file is intentionally isolated from kernel build/install logic.
 """
+import time 
 
 def install_sshfs_fuse(config, run_cmd):
     ssh_target = config.ssh_target
@@ -58,15 +59,28 @@ def mount_kernel_source(config, run_cmd):
         f'ssh -o StrictHostKeyChecking=no {ssh_target} '
         f'"mount | grep /usr/src/linux && umount /usr/src/linux || true"'
     )
-    
+
     print("[REBUILD] Initializing SSH trust (target → build)")
 
-    run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"mkdir -p ~/.ssh && chmod 700 ~/.ssh && '
-        f'ssh -o StrictHostKeyChecking=no '
-        f'{host_user}@{host_ip} \'echo SSH_OK\' || true"'
-    )
+    for i in range(5):
+        rc, out = run_cmd(
+            f'ssh -o StrictHostKeyChecking=no {ssh_target} '
+            f'"ssh -o BatchMode=yes '
+            f'-o StrictHostKeyChecking=no '
+            f'{host_user}@{host_ip} \'echo SSH_OK\'"'
+        )
+
+        print(out)
+
+        if rc == 0:
+            print("[REBUILD] SSH trust established ✅")
+            break
+
+        print("[REBUILD] SSH not ready yet, retrying...")
+        time.sleep(5)
+    else:
+        print("[REBUILD][ERROR] Unable to establish SSH trust")
+        return 1
 
     # SSHFS mount (FINAL FIX ✅)
     rc, out = run_cmd(
