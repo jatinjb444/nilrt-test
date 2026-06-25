@@ -54,14 +54,15 @@ def mount_kernel_source(config, run_cmd):
 
    
     # ✅ FIXED sshfs
+   
     rc, out = run_cmd(
-        f'ssh {ssh_target} '
-        f'"nohup sshfs -o StrictHostKeyChecking=no '
-        f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux '
-        f'> /dev/null 2>&1 &"'
+        f'ssh -f -o StrictHostKeyChecking=no {ssh_target} '
+        f'"sshfs -o reconnect '
+        f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux"'
     )
     print(out)
 
+    print(out)
     time.sleep(3)
 
 
