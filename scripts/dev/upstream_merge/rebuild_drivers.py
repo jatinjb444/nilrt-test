@@ -49,67 +49,83 @@ def mount_kernel_source(config, run_cmd):
     print(f"[DEBUG] kernel_src_dir = {kernel_src_dir}")
 
     # Ensure target dir exists
+   # Create mount point
     run_cmd(
         f'ssh -o StrictHostKeyChecking=no {ssh_target} '
         f'"mkdir -p /usr/src/linux"'
     )
 
-    # Unmount if already mounted
+    # Unmount existing mount if present
     run_cmd(
         f'ssh -o StrictHostKeyChecking=no {ssh_target} '
         f'"mount | grep /usr/src/linux && umount /usr/src/linux || true"'
     )
 
-    print("[REBUILD] Initializing SSH trust (target → build)")
+    print("[REBUILD] Verifying target -> build host SSH")
 
-    for i in range(5):
-        rc, out = run_cmd(
-            f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-            f'"ssh -o BatchMode=yes '
-            f'-o StrictHostKeyChecking=no '
-            f'{host_user}@{host_ip} \'echo SSH_OK\'"'
-        )
-
-        print(out)
-
-        if rc == 0:
-            print("[REBUILD] SSH trust established ✅")
-            break
-
-        print("[REBUILD] SSH not ready yet, retrying...")
-        time.sleep(5)
-    else:
-        print("[REBUILD][ERROR] Unable to establish SSH trust")
-        return 1
-
-    # SSHFS mount (FINAL FIX ✅)
     rc, out = run_cmd(
         f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"sshfs -o StrictHostKeyChecking=no '
-        f'-o UserKnownHostsFile=/dev/null '
+        f'"ssh -vvv {host_user}@{host_ip} echo BUILD_OK"'
+    )
+    print(out)
+
+    if rc != 0:
+        raise RuntimeError(
+            f"Failed: target cannot SSH to build host ({host_user}@{host_ip})"
+        )
+
+    print("[REBUILD] Verifying kernel source path")
+
+    rc, out = run_cmd(
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
+        f'"ssh {host_user}@{host_ip} '
+        f'ls -ld {kernel_src_dir}"'
+    )
+    print(out)
+
+    if rc != 0:
+        raise RuntimeError(
+            f"Failed: kernel source path not accessible ({kernel_src_dir})"
+        )
+
+    print("[REBUILD] Mounting kernel source via SSHFS")
+
+    rc, out = run_cmd(
+        f'ssh -tt -o StrictHostKeyChecking=no {ssh_target} '
+        f'"sshfs -d '
         f'-o reconnect '
         f'{host_user}@{host_ip}:{kernel_src_dir} '
         f'/usr/src/linux"'
     )
     print(out)
 
-    # Verify mount contents (IMPORTANT ✅)
+    if rc != 0:
+        raise RuntimeError("SSHFS mount failed")
+
+    print("[REBUILD] Verifying mount")
+
     rc, out = run_cmd(
-        f'ssh {ssh_target} "ls -l /usr/src/linux | head"'
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
+        f'"mount | grep /usr/src/linux"'
     )
     print(out)
 
-    # Check Makefile exists
     rc, out = run_cmd(
-        f'ssh {ssh_target} '
-        f'"test -f /usr/src/linux/Makefile && echo OK"'
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
+        f'"ls -la /usr/src/linux | head -20"'
+    )
+    print(out)
+
+    rc, out = run_cmd(
+        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
+        f'"test -f /usr/src/linux/Makefile && echo MAKEFILE_FOUND"'
     )
     print(out)
 
     if rc != 0:
-        print("[REBUILD][ERROR] Kernel source not visible at /usr/src/linux")
-        return 1
-
+        raise RuntimeError(
+            "Mount succeeded but Makefile missing under /usr/src/linux"
+        )
     print("[REBUILD][OK] Kernel source mounted via SSHFS")
     return 0
 
