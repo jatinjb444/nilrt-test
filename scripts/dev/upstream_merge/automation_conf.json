@@ -21,7 +21,7 @@
     "target_branch": "nilrt/master/6.12",
     "toolchain_prefix": "/usr/local/oecore-x86_64/sysroots/x86_64-nilrtsdk-linux/usr/bin/x86_64-nilrt-linux/x86_64-nilrt-linux-",
     "ssh_target": "admin@10.152.130.64",   
-    "build_host_ip": "10.152.9.56",
+    "build_host_ip": "",
     "build_user": "",
     "work_item_id": ""
     }

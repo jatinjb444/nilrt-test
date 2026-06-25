@@ -2,8 +2,9 @@
 Rebuild NI out-of-tree drivers using DKMS.
 This file is intentionally isolated from kernel build/install logic.
 """
-import time 
 
+import time
+    
 def install_sshfs_fuse(config, run_cmd):
     ssh_target = config.ssh_target
 
@@ -45,89 +46,37 @@ def mount_kernel_source(config, run_cmd):
 
     print("[REBUILD][STEP 1] Mount kernel source via SSHFS")
 
-    # DEBUG (important)
-    print(f"[DEBUG] kernel_src_dir = {kernel_src_dir}")
-
-    # Ensure target dir exists
-   # Create mount point
+    run_cmd(f'ssh {ssh_target} "mkdir -p /usr/src/linux"')
     run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"mkdir -p /usr/src/linux"'
-    )
-
-    # Unmount existing mount if present
-    run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
+        f'ssh {ssh_target}'
         f'"mount | grep /usr/src/linux && umount /usr/src/linux || true"'
     )
 
-    print("[REBUILD] Verifying target -> build host SSH")
+   
+    # ✅ FIXED sshfs
+    rc, out = run_cmd(
+        f'ssh {ssh_target} '
+        f'"nohup sshfs -o StrictHostKeyChecking=no '
+        f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux '
+        f'> /dev/null 2>&1 &"'
+    )
+    print(out)
+
+    time.sleep(3)
+
 
     rc, out = run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"ssh -vvv {host_user}@{host_ip} echo BUILD_OK"'
+        f'ssh {ssh_target} "test -f /usr/src/linux/Makefile && echo OK"'
     )
     print(out)
 
     if rc != 0:
-        raise RuntimeError(
-            f"Failed: target cannot SSH to build host ({host_user}@{host_ip})"
-        )
+        print("[REBUILD][ERROR] Kernel source not visible at /usr/src/linux")
+        return 1
 
-    print("[REBUILD] Verifying kernel source path")
-
-    rc, out = run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"ssh {host_user}@{host_ip} '
-        f'ls -ld {kernel_src_dir}"'
-    )
-    print(out)
-
-    if rc != 0:
-        raise RuntimeError(
-            f"Failed: kernel source path not accessible ({kernel_src_dir})"
-        )
-
-    print("[REBUILD] Mounting kernel source via SSHFS")
-
-    rc, out = run_cmd(
-        f'ssh -tt -o StrictHostKeyChecking=no {ssh_target} '
-        f'"sshfs -d '
-        f'-o reconnect '
-        f'{host_user}@{host_ip}:{kernel_src_dir} '
-        f'/usr/src/linux"'
-    )
-    print(out)
-
-    if rc != 0:
-        raise RuntimeError("SSHFS mount failed")
-
-    print("[REBUILD] Verifying mount")
-
-    rc, out = run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"mount | grep /usr/src/linux"'
-    )
-    print(out)
-
-    rc, out = run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"ls -la /usr/src/linux | head -20"'
-    )
-    print(out)
-
-    rc, out = run_cmd(
-        f'ssh -o StrictHostKeyChecking=no {ssh_target} '
-        f'"test -f /usr/src/linux/Makefile && echo MAKEFILE_FOUND"'
-    )
-    print(out)
-
-    if rc != 0:
-        raise RuntimeError(
-            "Mount succeeded but Makefile missing under /usr/src/linux"
-        )
     print("[REBUILD][OK] Kernel source mounted via SSHFS")
     return 0
+
 
 def fix_symlinks(config, run_cmd):
     ssh_target = config.ssh_target
