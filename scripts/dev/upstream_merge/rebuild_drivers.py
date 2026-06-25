@@ -55,13 +55,14 @@ def mount_kernel_source(config, run_cmd):
    
     # ✅ FIXED sshfs
    
+  
     rc, out = run_cmd(
-        f'ssh -f -o StrictHostKeyChecking=no {ssh_target} '
-        f'"sshfs -o reconnect '
-        f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux"'
+        f'ssh {ssh_target} '
+        f'"setsid sshfs -o reconnect '
+        f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux '
+        f'> /dev/null 2>&1 < /dev/null &"'
     )
-    print(out)
-
+    
     print(out)
     time.sleep(3)
 
