@@ -253,8 +253,9 @@ def create_kernel_pr(args, config, latest_tag, defconfig_changed):
 
     os.system(
         f"git remote add {config.fork_name} "
-        f"git@github.com:{config.username}/linux.git"
+        f"https://github.com/{config.username}/linux.git"
     )
+    
     print("[DEBUG] Remotes:")
     os.system("git remote -v")
 
@@ -275,7 +276,7 @@ def create_kernel_pr(args, config, latest_tag, defconfig_changed):
     )
     # Set fork details for GitRepo
     git_obj.fork_name = config.fork_name
-    git_obj.fork_url = f"git@github.com:{config.username}/linux.git"
+    git_obj.fork_url = f"https://github.com/{config.username}/linux.git"
 
     status, msg = push_branch_and_create_pr(
         git_obj,
