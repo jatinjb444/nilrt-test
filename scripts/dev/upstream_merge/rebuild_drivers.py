@@ -3,8 +3,6 @@ Rebuild NI out-of-tree drivers using DKMS.
 This file is intentionally isolated from kernel build/install logic.
 """
 
-import time
-    
 def install_sshfs_fuse(config, run_cmd):
     ssh_target = config.ssh_target
 
@@ -52,20 +50,12 @@ def mount_kernel_source(config, run_cmd):
         f'"mount | grep /usr/src/linux && umount /usr/src/linux || true"'
     )
 
-   
-    # ✅ FIXED sshfs
-   
-  
     rc, out = run_cmd(
         f'ssh {ssh_target} '
-        f'"setsid sshfs -o reconnect '
-        f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux '
-        f'> /dev/null 2>&1 < /dev/null &"'
+        f'"sshfs -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null '
+        f'{host_user}@{host_ip}:{kernel_src_dir} /usr/src/linux"'
     )
-    
     print(out)
-    time.sleep(3)
-
 
     rc, out = run_cmd(
         f'ssh {ssh_target} "test -f /usr/src/linux/Makefile && echo OK"'

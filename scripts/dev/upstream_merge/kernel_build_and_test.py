@@ -4,7 +4,7 @@ import sys
 import re
 import argparse
 import time
-import getpass
+import getpass 
 from log_and_email_utils import setup_logging, write_log_and_send_email
 from utils import build
 from utils.git_commands import (
@@ -14,6 +14,7 @@ from utils.git_commands import (
     git_status,
     git_clone,
     git_checkout,
+    git_pull,
 )
 from utils.git_repo import GitRepo
 from json_config import JsonConfig
@@ -241,40 +242,60 @@ def run_rebuild_drivers(config, run_cmd):
 def create_kernel_pr(args, config, latest_tag, defconfig_changed):
     if args.skip_push_and_pr:
         return
+    
+    # ✅ CRITICAL: go to correct repo
+    os.chdir(config.kernel_src_dir)
+    print("[FINAL DEBUG BEFORE PR]")
+    print("username =", config.username)
+    print("fork_name =", config.fork_name)
+    # ✅ CRITICAL: ensure fork remote exists
+    os.system(f"git remote remove {config.fork_name} 2>/dev/null || true")
 
-    pr_title = f"[{config.work_item_id}] Merge RT {latest_tag}"
+    os.system(
+        f"git remote add {config.fork_name} "
+        f"git@github.com:{config.username}/linux.git"
+    )
+    print("[DEBUG] Remotes:")
+    os.system("git remote -v")
+
+    pr_title = f"Merge tag '{latest_tag}' into {config.target_branch}"
 
     pr_description = (
+        f"Merge tag '{latest_tag}' into {config.target_branch}\n"
+        f"No merge conflicts\n"
         f"AB#{config.work_item_id}\n\n"
-        f"RT tag merged: {latest_tag}\n"
-        f"Defconfig regenerated: "
-        f"{'Yes' if defconfig_changed else 'No'}\n"
-        f"Kernel build: Success\n"
-        f"Driver rebuild: Success\n"
+        f"Testing\n"
+        f"- Built the kernel locally and verified system boot\n"
+        f"- Rebuilt DKMS and verified modules load successfully\n"
     )
 
     git_obj = GitRepo(
         local_repo=config.kernel_src_dir,
         local_base_branch=config.target_branch,
     )
+    # Set fork details for GitRepo
+    git_obj.fork_name = config.fork_name
+    git_obj.fork_url = f"git@github.com:{config.username}/linux.git"
 
     status, msg = push_branch_and_create_pr(
         git_obj,
-        branch_name=config.target_branch,
+        branch_name=os.popen("git branch --show-current").read().strip(),
         username=config.username,
         pr_title=pr_title,
         pr_description=pr_description,
     )
 
     if status != 0:
-        raise RuntimeError(f"Failed to create PR: {msg}")
-
-    print("[INFO] Branch pushed and PR created successfully")
-
+        if "No commits between" in msg:
+            print("[INFO] No new changes to create PR. Skipping PR creation.")
+            return
+        else:
+            raise RuntimeError(f"Failed to create PR: {msg}")
 
 def run_upstream_merge_script(args):
     original_cwd = os.getcwd()
     print("[INFO] Running upstream RT merge")
+
     build_user = os.getenv("BUILD_USER", getpass.getuser())
     print(f"[INFO] Using build user: {build_user}")
 
@@ -298,6 +319,14 @@ def run_upstream_merge_script(args):
 
     git_fetch("origin")
     git_checkout(config.target_branch, create=True, force_checkout=True)
+    
+    git_pull("origin", config.target_branch, rebase=True)
+
+    # ✅ AUTO-CREATE WORKING BRANCH
+    branch_name = f"rt-merge-{config.target_branch.split('/')[-1]}"
+    os.system(f"git checkout -b {branch_name} || git checkout {branch_name}")
+
+    print(f"[INFO] Switched to working branch: {branch_name}")
 
     # Ensure stable-rt remote exists using GitRepo abstraction
     kernel_repo.add_remote("stable-rt", STABLE_RT_REMOTE)
@@ -337,7 +366,6 @@ def run_upstream_merge_script(args):
     print("[DEBUG] OUT:", out)
 
     result = (rc, out)
-
 
     # --------------------
     # Failure case
@@ -382,6 +410,7 @@ def run_upstream_merge_script(args):
     else:
         tc_copy_status, tc_copy_msg = tc_result
         toolchain_dst = None
+        
     if tc_copy_status != 0:
         merge_report = {
             kernel_repo: (
