@@ -242,6 +242,7 @@ def run_rebuild_drivers(config, run_cmd):
 def create_kernel_pr(args, config, latest_tag, defconfig_changed):
     if args.skip_push_and_pr:
         return
+    token = os.getenv("GH_PAT")
     
     # ✅ CRITICAL: go to correct repo
     os.chdir(config.kernel_src_dir)
@@ -251,9 +252,10 @@ def create_kernel_pr(args, config, latest_tag, defconfig_changed):
     # ✅ CRITICAL: ensure fork remote exists
     os.system(f"git remote remove {config.fork_name} 2>/dev/null || true")
 
+    remote_url = f"https://{config.username}:{token}@github.com/{config.username}/linux.git"
+
     os.system(
-        f"git remote add {config.fork_name} "
-        f"https://github.com/{config.username}/linux.git"
+        f"git remote add {config.fork_name} {remote_url}"
     )
     
     print("[DEBUG] Remotes:")
@@ -276,7 +278,7 @@ def create_kernel_pr(args, config, latest_tag, defconfig_changed):
     )
     # Set fork details for GitRepo
     git_obj.fork_name = config.fork_name
-    git_obj.fork_url = f"https://github.com/{config.username}/linux.git"
+    git_obj.fork_url = f"https://{config.username}:{token}@github.com/{config.username}/linux.git"
 
     status, msg = push_branch_and_create_pr(
         git_obj,
