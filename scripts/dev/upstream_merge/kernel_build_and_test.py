@@ -278,7 +278,8 @@ def create_kernel_pr(args, config, latest_tag, defconfig_changed):
     )
     # Set fork details for GitRepo
     git_obj.fork_name = config.fork_name
-    git_obj.fork_url = f"https://github.com/{config.username}/linux.git"
+    git_obj.fork_url = remote_url
+    print("fork_url =", git_obj.fork_url)
     
     _, branch_name = git_branch(branch_name="", show_current=True)
     branch_name = branch_name.strip()
