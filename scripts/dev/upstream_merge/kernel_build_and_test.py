@@ -4,7 +4,7 @@ import sys
 import re
 import argparse
 import time
-import getpass 
+import getpass
 from log_and_email_utils import setup_logging, write_log_and_send_email
 from utils import build
 from utils.git_commands import (
@@ -15,6 +15,7 @@ from utils.git_commands import (
     git_clone,
     git_checkout,
     git_pull,
+    git_branch,
 )
 from utils.git_repo import GitRepo
 from json_config import JsonConfig
@@ -243,7 +244,6 @@ def create_kernel_pr(args, config, latest_tag, defconfig_changed):
     if args.skip_push_and_pr:
         return
     token = os.getenv("GH_PAT")
-    
     # ✅ CRITICAL: go to correct repo
     os.chdir(config.kernel_src_dir)
     print("[FINAL DEBUG BEFORE PR]")
@@ -278,12 +278,14 @@ def create_kernel_pr(args, config, latest_tag, defconfig_changed):
     )
     # Set fork details for GitRepo
     git_obj.fork_name = config.fork_name
-    git_obj.fork_url = f"https://{config.username}:{token}@github.com/{config.username}/linux.git"
-
+    git_obj.fork_url = f"https://github.com/{config.username}/linux.git"
+    
+    _, branch_name = git_branch(branch_name="", show_current=True)
+    branch_name = branch_name.strip()
     status, msg = push_branch_and_create_pr(
         git_obj,
-        branch_name=os.popen("git branch --show-current").read().strip(),
         username=config.username,
+        branch_name=branch_name,
         pr_title=pr_title,
         pr_description=pr_description,
     )
@@ -298,6 +300,8 @@ def create_kernel_pr(args, config, latest_tag, defconfig_changed):
 def run_upstream_merge_script(args):
     original_cwd = os.getcwd()
     print("[INFO] Running upstream RT merge")
+    build_user = os.getenv("BUILD_USER", getpass.getuser())
+    print(f"[INFO] Using build user: {build_user}")
 
     build_user = os.getenv("BUILD_USER", getpass.getuser())
     print(f"[INFO] Using build user: {build_user}")
@@ -357,16 +361,22 @@ def run_upstream_merge_script(args):
 
     safe_msg = f"Merge latest upstream {latest_tag}"
 
-    cmd = (
-        f'bash -c \'git merge {latest_tag} --signoff -m "{safe_msg}"\''
+    print("[DEBUG] Running safe merge via git_merge")
+
+    result = git_merge(
+        latest_tag,
+        message=safe_msg,
+        signoff=True
     )
 
-    print("[DEBUG] Running safe merge:", cmd)
-
-    rc, out = run_cmd(cmd)
+    rc, out = result
 
     print("[DEBUG] RC:", rc)
     print("[DEBUG] OUT:", out)
+    
+    
+    if rc == 0:
+        print(f"[INFO] Successfully merged {latest_tag}")
 
     result = (rc, out)
 
@@ -413,7 +423,6 @@ def run_upstream_merge_script(args):
     else:
         tc_copy_status, tc_copy_msg = tc_result
         toolchain_dst = None
-        
     if tc_copy_status != 0:
         merge_report = {
             kernel_repo: (
